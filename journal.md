@@ -1,0 +1,2 @@
+--sid unique user
+--roomid common for group
