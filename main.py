@@ -4,10 +4,9 @@ from fastapi import FastAPI
 import socketio
 import utils
 import config
-from signaling_server import ConnectionHandler, Signaling, RTCSessionDescription
+from signaling_server import ConnectionHandler, RTCSessionDescription
 from aiortc import RTCPeerConnection
-from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
-from aiortc.contrib.media import MediaPlayer, RelayStreamTrack, MediaStreamTrack
+from aiortc.contrib.media import MediaPlayer
 
 app = FastAPI()
 
@@ -21,13 +20,9 @@ app.mount("/ws", socket_app)
 # sio=socketio.AsyncServer(async_mode="asgi",cors_allowed_origins='*')
 # socket_app = socketio.ASGIApp(socketio_server=sio, socketio_path="socketio")
 # app.mount("/", socket_app)
+
+
 peerConnectionMethods = ConnectionHandler()
-signaling_server_methods = Signaling()
-
-# media_stream_track : MediaStreamTrack = MediaStreamTrack(player)
-# vidplayer = MediaPlayer('./videotrack.mp4')
-
-# relay_stream_track = RelayStreamTrack(player.audio,buffered=True)
 
 @app.get('/health')
 def check_health():
@@ -63,28 +58,22 @@ async def message(sid, message):
 
 @sio.on("media")
 async def handle_media(sid, offer):
+    """
+    Offer and sid is provided and answer is being emitted from Server
+    """
     player = MediaPlayer('./media_stream.mp3')
     
     user_peer_connection: RTCPeerConnection = peerConnectionMethods.peer_connections[sid]
-    # print(f"Offer has been trigerred value -> {offer}")
+    
     track = player.audio
     track.enabled = True
     user_peer_connection.addTrack(player.audio)
-    
-    # user_peer_connection.on('track', event_listner)
-    
     
     remote_description = RTCSessionDescription(sdp=offer['sdp'], type=offer['type'])
     # set description
     await user_peer_connection.setRemoteDescription(remote_description)
     
     answer: RTCSessionDescription = await user_peer_connection.createAnswer()
-    
-    
-    # for transreceiver in user_peer_connection.getTransceivers():
-    #     print(transreceiver)
-    #     user_peer_connection.addTrack(player.audio)
-       
 
     await user_peer_connection.setLocalDescription(answer)
     
@@ -97,3 +86,19 @@ async def handle_media(sid, offer):
 async def disconnect(sid):
     """Disconects the user"""
     await sio.leave_room(sid, "Akame")
+    
+    
+@sio.on("media:offer")
+async def media_offer(sid, offer):
+    print("media:offer is functionning")
+    await sio.emit(event="media:incoming:offer", data=offer, skip_sid=sid, to="Akame")
+
+@sio.on("media:answer")
+async def media_offer(sid, offer):
+    print("media:answer is functionning")
+    await sio.emit(event="media:incoming:answer", data=offer, skip_sid=sid, to="Akame")
+
+@sio.on("new-ice-candidate")
+async def new_ice_candidate(sid, icecandidate):
+    print("ice candidate-working")
+    await sio.emit(event="new-ice-candidate:incoming", data=icecandidate, skip_sid=sid, to="Akame")
